@@ -14,8 +14,13 @@ create table if not exists produtos (
   nome text not null,
   preco numeric(10,2),
   quantidade integer not null default 0 check (quantidade >= 0),
+  ativo boolean not null default true,
   criado_em timestamptz not null default now()
 );
+
+-- Se a tabela já existia antes desta coluna ser criada, adiciona agora
+-- (não afeta nada se você já rodou este script com a coluna incluída).
+alter table produtos add column if not exists ativo boolean not null default true;
 
 -- Nome único, sem diferenciar maiúsculas/minúsculas
 create unique index if not exists produtos_nome_unico

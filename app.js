@@ -111,31 +111,72 @@ function renderizarProdutos() {
 }
 
 function criarCardProduto(produto) {
+  const ativo = produto.ativo !== false;
+
   const card = document.createElement("div");
-  card.className = "cartao-produto";
+  card.className = "cartao-produto" + (ativo ? "" : " inativo");
   card.dataset.id = produto.id;
 
-  // Botão com nome + preço (abre edição)
+  // Botão com nome + preço (toca pra abrir editar: nome, quantidade, preço)
   const botaoInfo = document.createElement("button");
   botaoInfo.type = "button";
   botaoInfo.className = "cartao-produto-info";
+  botaoInfo.addEventListener("click", () => abrirEdicaoProduto(produto.id));
 
-  const nomeLinha = document.createElement("p");
+  const nomeLinha = document.createElement("span");
   nomeLinha.className = "cartao-produto-nome";
-  const nomeSpan = document.createElement("span");
-  nomeSpan.textContent = produto.nome;
-  nomeLinha.appendChild(nomeSpan);
+  nomeLinha.textContent = produto.nome;
+  if (!ativo) {
+    const selo = document.createElement("span");
+    selo.className = "selo-inativo";
+    selo.textContent = "Pausado";
+    nomeLinha.appendChild(selo);
+  }
 
-  const precoLinha = document.createElement("p");
+  const precoLinha = document.createElement("span");
   precoLinha.className = "cartao-produto-preco";
   precoLinha.textContent = produto.preco != null ? formatarMoeda(produto.preco) : "";
 
   botaoInfo.appendChild(nomeLinha);
   botaoInfo.appendChild(precoLinha);
-  botaoInfo.addEventListener("click", () => abrirEdicaoProduto(produto.id));
+
+  // Pausar/ativar: tira ou devolve o produto da imagem do WhatsApp, sem abrir nada
+  const btnPausar = document.createElement("button");
+  btnPausar.type = "button";
+  btnPausar.className = "btn-pausar";
+  btnPausar.setAttribute("aria-label", ativo ? "Pausar produto" : "Ativar produto");
+  btnPausar.textContent = ativo ? "⏸️" : "▶️";
+  btnPausar.addEventListener("click", () => alternarAtivo(produto.id, btnPausar));
+
+  const quantidade = document.createElement("span");
+  quantidade.className = "cartao-produto-quantidade";
+  quantidade.textContent = String(produto.quantidade);
 
   card.appendChild(botaoInfo);
+  card.appendChild(btnPausar);
+  card.appendChild(quantidade);
   return card;
+}
+
+async function alternarAtivo(produtoId, botao) {
+  const produto = produtos.find((p) => p.id === produtoId);
+  if (!produto) return;
+
+  const ativoAtual = produto.ativo !== false;
+  const novoValor = !ativoAtual;
+
+  botao.disabled = true;
+  try {
+    const { error } = await db.from("produtos").update({ ativo: novoValor }).eq("id", produtoId);
+    if (error) throw error;
+    produto.ativo = novoValor;
+    renderizarProdutos();
+    esconderErro();
+  } catch (erro) {
+    console.error(erro);
+    mostrarErro(`Sem conexão. Não foi possível ${novoValor ? "ativar" : "pausar"} o produto, tente de novo.`);
+    botao.disabled = false;
+  }
 }
 
 // ============================================================
@@ -194,6 +235,7 @@ function abrirEdicaoProduto(produtoId) {
   if (!produto) return;
   el("input-editar-id").value = produtoId;
   el("input-editar-nome").value = produto.nome;
+  el("input-editar-quantidade").value = String(produto.quantidade);
   el("input-editar-preco").value = produto.preco != null ? String(produto.preco).replace(".", ",") : "";
   esconderErroCampo("erro-editar-produto");
   abrirModal("modal-editar-produto");
@@ -204,10 +246,17 @@ el("btn-salvar-editar-produto").addEventListener("click", async () => {
 
   const produtoId = el("input-editar-id").value;
   const nome = el("input-editar-nome").value.trim();
+  const quantidadeBruta = el("input-editar-quantidade").value.trim();
   const precoBruto = el("input-editar-preco").value.trim();
 
   if (!nome) {
     mostrarErroCampo("erro-editar-produto", "Digite o nome do produto.");
+    return;
+  }
+
+  const quantidade = quantidadeBruta === "" ? 0 : parseInt(quantidadeBruta, 10);
+  if (isNaN(quantidade) || quantidade < 0) {
+    mostrarErroCampo("erro-editar-produto", "Digite uma quantidade válida (0 ou mais).");
     return;
   }
 
@@ -220,7 +269,7 @@ el("btn-salvar-editar-produto").addEventListener("click", async () => {
   travaSalvar = true;
   mostrarCarregando(true);
   try {
-    const { error } = await db.from("produtos").update({ nome, preco }).eq("id", produtoId);
+    const { error } = await db.from("produtos").update({ nome, quantidade, preco }).eq("id", produtoId);
     if (error) {
       if (error.code === "23505") {
         mostrarErroCampo("erro-editar-produto", "Já existe um produto com esse nome.");
@@ -335,7 +384,9 @@ async function gerarImagemInline() {
 }
 
 function produtosParaImagem() {
-  return [...produtos].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+  return produtos
+    .filter((p) => p.ativo !== false)
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 }
 
 async function gerarPreviaImagem() {

@@ -130,13 +130,15 @@ button, input {
   padding: 14px;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.04);
 }
 
 .cartao-produto-info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
   text-align: left;
   background: none;
   border: none;
@@ -146,9 +148,7 @@ button, input {
 }
 
 .cartao-produto-nome {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display: block;
   font-size: 18px;
   font-weight: 700;
   margin: 0 0 2px;
@@ -156,9 +156,58 @@ button, input {
 }
 
 .cartao-produto-preco {
+  display: block;
   color: var(--cor-texto-suave);
   font-size: 14px;
   font-weight: 600;
+}
+
+.btn-pausar {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--cor-borda);
+  background: var(--cor-fundo);
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+}
+
+.btn-pausar:disabled {
+  opacity: 0.5;
+}
+
+.cartao-produto-quantidade {
+  flex: none;
+  min-width: 40px;
+  text-align: center;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--cor-principal);
+  background: var(--cor-principal-clara);
+  border-radius: 10px;
+  padding: 6px 10px;
+}
+
+.cartao-produto.inativo {
+  opacity: 0.55;
+}
+
+.selo-inativo {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 800;
+  background: #eee;
+  color: #777;
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  vertical-align: middle;
 }
 
 .botao {
