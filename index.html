@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Estoque" />
+<meta name="theme-color" content="#d6336c" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icon.png" />
+<link rel="icon" href="icon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<title>Estoque</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ===================== TELA PRINCIPAL: ESTOQUE ===================== -->
+  <div id="tela-estoque" class="tela">
+
+    <header class="cabecalho">
+      <h1 id="nome-doceria">Doceria</h1>
+    </header>
+
+    <div id="aviso-erro" class="aviso-erro oculto" role="alert"></div>
+
+    <section class="cartao-novo-produto">
+      <h2>Novo produto</h2>
+      <input id="input-novo-nome" class="campo-novo-produto" type="text" maxlength="80" placeholder="Nome (ex: Brigadeiro)" />
+      <p id="erro-novo-produto" class="erro-campo oculto"></p>
+      <button id="btn-salvar-novo-produto" class="botao botao-principal botao-largo" type="button">Salvar produto</button>
+    </section>
+
+    <main id="lista-produtos" class="lista-produtos">
+      <p id="estado-vazio" class="estado-vazio oculto">Nenhum produto cadastrado ainda. Use o formulário acima para começar.</p>
+      <p id="carregando" class="carregando">Carregando produtos…</p>
+    </main>
+
+    <!-- ===================== IMAGEM PARA WHATSAPP (na mesma página) ===================== -->
+    <section class="secao-imagem">
+      <button id="btn-gerar-imagem" class="botao botao-principal botao-largo" type="button">📸 Gerar imagem para WhatsApp</button>
+
+      <div id="resultado-imagem" class="resultado-imagem oculto">
+        <div id="aviso-sem-produtos" class="estado-vazio oculto">
+          Nenhum produto cadastrado ainda. Cadastre algum produto para gerar a imagem.
+        </div>
+
+        <div id="preview-container" class="preview-container">
+          <img id="preview-imagem" class="preview-imagem" alt="Prévia da imagem para WhatsApp" />
+        </div>
+        <p class="dica-preview">Toque e segure na imagem para salvar, se preferir.</p>
+
+        <div class="acoes-imagem">
+          <button id="btn-baixar-imagem" class="botao botao-secundario oculto" type="button">Baixar imagem</button>
+          <button id="btn-compartilhar" class="botao botao-principal" type="button">Enviar pelo WhatsApp</button>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- ===================== MODAL: EDITAR PRODUTO ===================== -->
+  <div id="modal-editar-produto" class="modal oculto">
+    <div class="modal-conteudo">
+      <h2>Editar produto</h2>
+      <input type="hidden" id="input-editar-id" />
+      <label class="campo">
+        <span>Nome</span>
+        <input id="input-editar-nome" type="text" maxlength="80" />
+      </label>
+      <label class="campo">
+        <span>Preço (opcional)</span>
+        <input id="input-editar-preco" type="text" inputmode="decimal" placeholder="Ex: 3,50" />
+      </label>
+      <p id="erro-editar-produto" class="erro-campo oculto"></p>
+      <div class="modal-botoes">
+        <button id="btn-excluir-produto" class="botao botao-perigo" type="button">Excluir</button>
+        <button id="btn-salvar-editar-produto" class="botao botao-principal" type="button">Salvar</button>
+      </div>
+      <button class="botao botao-fantasma botao-cancelar-largo" type="button" data-fechar-modal="modal-editar-produto">Cancelar</button>
+    </div>
+  </div>
+
+  <canvas id="canvas-imagem" class="canvas-oculto" aria-hidden="true"></canvas>
+
+  <div id="indicador-carregando" class="indicador-carregando oculto">
+    <div class="spinner"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="config.js" defer></script>
+  <script src="app.js" defer></script>
+</body>
+</html>

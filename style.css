@@ -1,0 +1,355 @@
+/* ============================================================
+   ESTILOS — Lista de Produtos da Doceria
+   Cores vêm do config.js via variáveis CSS definidas em app.js.
+   ============================================================ */
+
+:root {
+  --cor-principal: #d6336c;
+  --cor-principal-clara: #fbe4ec;
+  --cor-fundo: #fffaf7;
+  --cor-cartao: #ffffff;
+  --cor-borda: #f0e2e2;
+  --cor-texto: #3a2a2a;
+  --cor-texto-suave: #8a7575;
+  --cor-erro: #c62828;
+  --cor-sucesso: #2e7d32;
+  --raio: 14px;
+  --area-segura-baixo: env(safe-area-inset-bottom, 0px);
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--cor-fundo);
+  color: var(--cor-texto);
+  font-family: "Nunito", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, input {
+  font-family: inherit;
+}
+
+.oculto { display: none !important; }
+
+.tela {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---------- Cabeçalho ---------- */
+.cabecalho {
+  padding: 18px 16px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cabecalho h1 {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--cor-principal);
+}
+
+/* ---------- Aviso de erro ---------- */
+.aviso-erro {
+  margin: 0 16px 10px;
+  background: #fdecea;
+  color: var(--cor-erro);
+  border: 1px solid #f5c6cb;
+  border-radius: var(--raio);
+  padding: 10px 14px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* ---------- Cartão de novo produto (sempre visível, no topo) ---------- */
+.cartao-novo-produto {
+  margin: 0 16px 14px;
+  background: var(--cor-cartao);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  padding: 14px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.cartao-novo-produto h2 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--cor-principal);
+}
+
+.campo-novo-produto {
+  width: 100%;
+  min-height: 48px;
+  font-size: 16px;
+  border: 1px solid var(--cor-borda);
+  border-radius: 10px;
+  padding: 0 12px;
+  background: var(--cor-fundo);
+  color: var(--cor-texto);
+  margin-bottom: 10px;
+}
+
+.campo-novo-produto:focus {
+  outline: 2px solid var(--cor-principal);
+  outline-offset: 1px;
+}
+
+.botao-largo {
+  width: 100%;
+  flex: none;
+}
+
+/* ---------- Lista de produtos ---------- */
+.lista-produtos {
+  padding: 4px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.estado-vazio, .carregando {
+  text-align: center;
+  color: var(--cor-texto-suave);
+  padding: 40px 20px;
+  font-size: 15px;
+}
+
+.cartao-produto {
+  background: var(--cor-cartao);
+  border: 1px solid var(--cor-borda);
+  border-radius: var(--raio);
+  padding: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+}
+
+.cartao-produto-info {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  cursor: pointer;
+}
+
+.cartao-produto-nome {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 2px;
+  overflow-wrap: anywhere;
+}
+
+.cartao-produto-preco {
+  color: var(--cor-texto-suave);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.botao {
+  min-height: 48px;
+  border: none;
+  border-radius: var(--raio);
+  font-size: 15px;
+  font-weight: 700;
+  padding: 0 16px;
+  cursor: pointer;
+}
+
+.botao-principal {
+  flex: 1.4;
+  background: var(--cor-principal);
+  color: #fff;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+  font-size: 16px;
+}
+
+.botao-secundario {
+  flex: 1;
+  background: var(--cor-cartao);
+  color: var(--cor-principal);
+  border: 2px solid var(--cor-principal);
+}
+
+.botao-fantasma {
+  flex: 1;
+  background: none;
+  color: var(--cor-texto-suave);
+}
+
+.botao-perigo {
+  flex: 1;
+  background: #fdecea;
+  color: var(--cor-erro);
+}
+
+.botao:disabled {
+  opacity: 0.6;
+}
+
+.botao-cancelar-largo {
+  width: 100%;
+  margin-top: 8px;
+}
+
+/* ---------- Modais ---------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  display: flex;
+  align-items: flex-end;
+  z-index: 50;
+}
+
+.modal-conteudo {
+  background: var(--cor-cartao);
+  width: 100%;
+  border-radius: 20px 20px 0 0;
+  padding: 20px 18px calc(20px + var(--area-segura-baixo));
+  max-height: 88vh;
+  overflow-y: auto;
+}
+
+.modal-conteudo h2 {
+  margin: 0 0 14px;
+  font-size: 19px;
+  color: var(--cor-principal);
+}
+
+.campo {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.campo span {
+  display: block;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--cor-texto-suave);
+  margin-bottom: 5px;
+}
+
+.campo input[type="text"] {
+  width: 100%;
+  min-height: 48px;
+  font-size: 16px;
+  border: 1px solid var(--cor-borda);
+  border-radius: 10px;
+  padding: 0 12px;
+  background: var(--cor-fundo);
+  color: var(--cor-texto);
+}
+
+.campo input:focus {
+  outline: 2px solid var(--cor-principal);
+  outline-offset: 1px;
+}
+
+.erro-campo {
+  color: var(--cor-erro);
+  font-size: 13px;
+  font-weight: 700;
+  margin: -6px 0 12px;
+}
+
+.modal-botoes {
+  display: flex;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+/* ---------- Imagem para WhatsApp (seção no fim da mesma página) ---------- */
+.secao-imagem {
+  padding: 4px 16px calc(24px + var(--area-segura-baixo));
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.resultado-imagem {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.preview-container {
+  width: 100%;
+  max-width: 420px;
+  border-radius: var(--raio);
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  background: #eee;
+}
+
+.preview-imagem {
+  width: 100%;
+  display: block;
+}
+
+.dica-preview {
+  font-size: 13px;
+  color: var(--cor-texto-suave);
+  margin: 10px 0 18px;
+  text-align: center;
+}
+
+.acoes-imagem {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.canvas-oculto {
+  position: absolute;
+  left: -9999px;
+  top: -9999px;
+}
+
+/* ---------- Indicador de carregamento ---------- */
+.indicador-carregando {
+  position: fixed;
+  inset: 0;
+  background: rgba(255,255,255,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 4px solid var(--cor-principal-clara);
+  border-top-color: var(--cor-principal);
+  animation: girar 0.8s linear infinite;
+}
+
+@keyframes girar {
+  to { transform: rotate(360deg); }
+}
+
+@media (min-width: 480px) {
+  .lista-produtos, .secao-imagem, .aviso-erro { max-width: 480px; margin-left: auto; margin-right: auto; width: 100%; }
+  .cabecalho, .cartao-novo-produto { max-width: 480px; margin: 0 auto; width: 100%; }
+}
