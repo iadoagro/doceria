@@ -15,7 +15,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet" />
 <title>Estoque</title>
-<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="style.css?v=10" />
 </head>
 <body>
 
@@ -28,11 +28,32 @@
 
     <div id="aviso-erro" class="aviso-erro oculto" role="alert"></div>
 
-    <section class="cartao-novo-produto">
-      <h2>Novo produto</h2>
-      <input id="input-novo-nome" class="campo-novo-produto" type="text" maxlength="80" placeholder="Nome (ex: Brigadeiro)" />
+    <nav class="abas-categorias" aria-label="Categorias">
+      <button class="aba-categoria ativa" type="button" data-categoria="geladinho" aria-pressed="true">Geladinho</button>
+      <button class="aba-categoria" type="button" data-categoria="trufas" aria-pressed="false">Trufas</button>
+      <button class="aba-categoria" type="button" data-categoria="doces" aria-pressed="false">Doces</button>
+      <button class="aba-categoria" type="button" data-categoria="resumo" aria-pressed="false">Vendas</button>
+    </nav>
+
+    <section id="cartao-produto-form" class="cartao-novo-produto">
+      <h2 id="titulo-novo-produto">Novo geladinho</h2>
+      <input id="input-novo-nome" class="campo-novo-produto" type="text" maxlength="80" placeholder="Nome (ex: Ninho com Oreo)" />
       <p id="erro-novo-produto" class="erro-campo oculto"></p>
-      <button id="btn-salvar-novo-produto" class="botao botao-principal botao-largo" type="button">Salvar produto</button>
+      <button id="btn-salvar-novo-produto" class="botao botao-principal botao-largo" type="button">Salvar geladinho</button>
+      <div id="resumo-vendas" class="resumo-vendas" aria-live="polite">
+        <p id="resumo-vendas-titulo" class="resumo-vendas-titulo">Vendas dos geladinhos</p>
+        <div class="resumo-vendas-grid">
+          <div class="resumo-vendas-item">
+            <span class="resumo-vendas-label">Quantidade vendida</span>
+            <strong id="total-quantidade-vendida">0 un.</strong>
+          </div>
+          <div class="resumo-vendas-item">
+            <span class="resumo-vendas-label">Valor vendido</span>
+            <strong id="total-valor-vendido">R$ 0,00</strong>
+          </div>
+        </div>
+        <div id="resumo-vendas-sabores" class="resumo-vendas-sabores"></div>
+      </div>
     </section>
 
     <main id="lista-produtos" class="lista-produtos">
@@ -40,9 +61,32 @@
       <p id="carregando" class="carregando">Carregando produtos…</p>
     </main>
 
+    <section id="painel-vendas" class="painel-vendas oculto">
+      <h2>Vendas gerais</h2>
+      <div class="resumo-vendas-grid">
+        <div class="resumo-vendas-item">
+          <span class="resumo-vendas-label">Quantidade vendida</span>
+          <strong id="total-geral-quantidade">0 un.</strong>
+        </div>
+        <div class="resumo-vendas-item">
+          <span class="resumo-vendas-label">Valor vendido</span>
+          <strong id="total-geral-valor">R$ 0,00</strong>
+        </div>
+      </div>
+      <div id="painel-vendas-detalhes" class="painel-vendas-detalhes"></div>
+    </section>
+
     <!-- ===================== IMAGEM PARA WHATSAPP (na mesma página) ===================== -->
-    <section class="secao-imagem">
-      <button id="btn-gerar-imagem" class="botao botao-principal botao-largo" type="button">📸 Gerar imagem para WhatsApp</button>
+    <section id="secao-imagem" class="secao-imagem">
+      <div class="opcoes-imagem">
+        <label class="controle-switch" for="switch-mostrar-precos">
+          <span>Mostrar preços na imagem</span>
+          <input id="switch-mostrar-precos" type="checkbox" checked />
+          <span class="switch-visual" aria-hidden="true"></span>
+        </label>
+      </div>
+
+      <button id="btn-gerar-imagem" class="botao botao-principal botao-largo" type="button">📸 Gerar imagem dos geladinhos</button>
 
       <div id="resultado-imagem" class="resultado-imagem oculto">
         <div id="aviso-sem-produtos" class="estado-vazio oculto">
@@ -68,6 +112,14 @@
     <div class="modal-conteudo">
       <h2>Editar produto</h2>
       <input type="hidden" id="input-editar-id" />
+      <label class="campo">
+        <span>Categoria</span>
+        <select id="select-editar-categoria">
+          <option value="geladinho">Geladinho</option>
+          <option value="trufas">Trufas</option>
+          <option value="doces">Doces</option>
+        </select>
+      </label>
       <label class="campo">
         <span>Nome</span>
         <input id="input-editar-nome" type="text" maxlength="80" />
@@ -97,6 +149,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
   <script src="config.js" defer></script>
-  <script src="app.js" defer></script>
+  <script src="app.js?v=8" defer></script>
 </body>
 </html>

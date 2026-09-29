@@ -8,7 +8,67 @@ const db = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
 
 // ---------- Estado em memória ----------
 let produtos = []; // lista de produtos vinda do banco
+let vendas = []; // movimentações de venda usadas no resumo
 let travaSalvar = false; // trava simples contra toque duplo em Salvar/Excluir
+let ultimasVendasPorProduto = {};
+
+const CATEGORIA_PADRAO = "geladinho";
+const ABA_RESUMO = "resumo";
+const VENDAS_CONTAR_A_PARTIR_DE = "2026-09-29T03:29:32.211Z";
+const TEMPO_DESFAZER_VENDA_MS = 2 * 60 * 1000;
+const CATEGORIAS = [
+  {
+    id: "geladinho",
+    nome: "Geladinho",
+    plural: "geladinhos",
+    tituloNovo: "Novo geladinho",
+    placeholderNovo: "Nome (ex: Ninho com Oreo)",
+    textoSalvar: "Salvar geladinho",
+    textoGerarImagem: "📸 Gerar imagem dos geladinhos",
+    tituloVendas: "Vendas dos geladinhos",
+    tituloImagem: "Geladinhos disponíveis hoje",
+    vazioLista: "Nenhum geladinho cadastrado ainda. Use o formulário acima para começar.",
+    vazioImagem: "Nenhum geladinho ativo nesta aba. Cadastre ou ative algum para gerar a imagem.",
+  },
+  {
+    id: "trufas",
+    nome: "Trufas",
+    plural: "trufas",
+    tituloNovo: "Nova trufa",
+    placeholderNovo: "Nome (ex: Trufa de morango)",
+    textoSalvar: "Salvar trufa",
+    textoGerarImagem: "📸 Gerar imagem das trufas",
+    tituloVendas: "Vendas das trufas",
+    tituloImagem: "Trufas disponíveis hoje",
+    vazioLista: "Nenhuma trufa cadastrada ainda. Use o formulário acima para começar.",
+    vazioImagem: "Nenhuma trufa ativa nesta aba. Cadastre ou ative alguma para gerar a imagem.",
+  },
+  {
+    id: "doces",
+    nome: "Doces",
+    plural: "doces",
+    tituloNovo: "Novo doce",
+    placeholderNovo: "Nome (ex: Brigadeiro)",
+    textoSalvar: "Salvar doce",
+    textoGerarImagem: "📸 Gerar imagem dos doces",
+    tituloVendas: "Vendas dos doces",
+    tituloImagem: "Doces disponíveis hoje",
+    vazioLista: "Nenhum doce cadastrado ainda. Use o formulário acima para começar.",
+    vazioImagem: "Nenhum doce ativo nesta aba. Cadastre ou ative algum para gerar a imagem.",
+  },
+];
+const RESUMO_CONFIG = {
+  id: ABA_RESUMO,
+  nome: "Vendas",
+  textoGerarImagem: "",
+  tituloVendas: "Vendas gerais",
+  vazioLista: "",
+  vazioImagem: "",
+};
+
+let categoriaAtual = CATEGORIA_PADRAO;
+let mostrarPrecosImagem = true;
+let imagensPorCategoria = criarEstadoImagens();
 
 // ---------- Referências de elementos ----------
 const el = (id) => document.getElementById(id);
@@ -18,6 +78,7 @@ const estadoVazio = el("estado-vazio");
 const carregando = el("carregando");
 const avisoErro = el("aviso-erro");
 const indicadorCarregando = el("indicador-carregando");
+const abasCategorias = Array.from(document.querySelectorAll(".aba-categoria"));
 
 // ============================================================
 // INICIALIZAÇÃO
@@ -47,8 +108,52 @@ function hexParaRgb(hex) {
   return { r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255 };
 }
 
+function criarEstadoImagens() {
+  return CATEGORIAS.reduce((estado, categoria) => {
+    estado[categoria.id] = { blob: null, url: "" };
+    return estado;
+  }, {});
+}
+
+function categoriaConfig(categoriaId = categoriaAtual) {
+  if (categoriaId === ABA_RESUMO) return RESUMO_CONFIG;
+  return CATEGORIAS.find((categoria) => categoria.id === categoriaId) || CATEGORIAS[0];
+}
+
+function categoriaValida(categoriaId) {
+  return categoriaId === ABA_RESUMO || CATEGORIAS.some((categoria) => categoria.id === categoriaId);
+}
+
+function categoriaDoProduto(produto) {
+  if (categoriaValida(produto.categoria)) return produto.categoria;
+  if ((produto.nome || "").toLowerCase().includes("trufa")) return "trufas";
+  return CATEGORIA_PADRAO;
+}
+
+function produtosDaCategoria(categoriaId = categoriaAtual) {
+  if (categoriaId === ABA_RESUMO) return produtos;
+  return produtos.filter((produto) => categoriaDoProduto(produto) === categoriaId);
+}
+
+function imagemDaCategoria(categoriaId = categoriaAtual) {
+  return imagensPorCategoria[categoriaId] || imagensPorCategoria[CATEGORIA_PADRAO];
+}
+
+function limparImagemCategoria(categoriaId) {
+  const estado = imagensPorCategoria[categoriaId];
+  if (!estado) return;
+  if (estado.url) URL.revokeObjectURL(estado.url);
+  estado.blob = null;
+  estado.url = "";
+}
+
+function limparImagensGeradas() {
+  CATEGORIAS.forEach((categoria) => limparImagemCategoria(categoria.id));
+}
+
 async function iniciar() {
   aplicarConfiguracaoVisual();
+  atualizarInterfaceCategoria();
   configurarEventos();
   await carregarProdutos();
 }
@@ -75,6 +180,8 @@ async function carregarProdutos() {
     if (error) throw error;
 
     produtos = data || [];
+    await carregarVendas();
+    limparImagensGeradas();
     renderizarProdutos();
     if (!el("resultado-imagem").classList.contains("oculto")) gerarPreviaImagem();
     esconderErro();
@@ -83,6 +190,22 @@ async function carregarProdutos() {
     mostrarErro("Sem conexão. Não foi possível carregar os produtos. Toque para tentar de novo.");
   } finally {
     carregando.classList.add("oculto");
+  }
+}
+
+async function carregarVendas() {
+  try {
+    const { data, error } = await db
+      .from("movimentacoes")
+      .select("id, produto_id, quantidade, preco_unitario, criado_em")
+      .eq("tipo", "venda")
+      .gte("criado_em", VENDAS_CONTAR_A_PARTIR_DE);
+
+    if (error) throw error;
+    vendas = data || [];
+  } catch (erro) {
+    console.error("Não foi possível carregar o resumo de vendas.", erro);
+    vendas = [];
   }
 }
 
@@ -98,12 +221,152 @@ function formatarMoeda(valor) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valor);
 }
 
+function formatarQuantidadeVendida(total) {
+  return `${total} un.`;
+}
+
+function resumoVendasDaCategoria(categoriaId = categoriaAtual) {
+  const produtosPorId = new Map(produtos.map((produto) => [produto.id, produto]));
+  const idsCategoria = new Set(produtosDaCategoria(categoriaId).map((produto) => produto.id));
+
+  return vendas.reduce((resumo, venda) => {
+    if (!idsCategoria.has(venda.produto_id)) return resumo;
+
+    const produto = produtosPorId.get(venda.produto_id);
+    const quantidadeVendida = Math.abs(parseInt(venda.quantidade, 10) || 0);
+    const precoVenda = venda.preco_unitario != null
+      ? Number(venda.preco_unitario)
+      : Number(produto?.preco || 0);
+
+    resumo.quantidade += quantidadeVendida;
+    resumo.valor += quantidadeVendida * (Number.isFinite(precoVenda) ? precoVenda : 0);
+    return resumo;
+  }, { quantidade: 0, valor: 0 });
+}
+
+function resumoVendasDoProduto(produto) {
+  return vendas.reduce((resumo, venda) => {
+    if (venda.produto_id !== produto.id) return resumo;
+
+    const quantidadeVendida = Math.abs(parseInt(venda.quantidade, 10) || 0);
+    const precoVenda = venda.preco_unitario != null
+      ? Number(venda.preco_unitario)
+      : Number(produto.preco || 0);
+
+    resumo.quantidade += quantidadeVendida;
+    resumo.valor += quantidadeVendida * (Number.isFinite(precoVenda) ? precoVenda : 0);
+    return resumo;
+  }, { quantidade: 0, valor: 0 });
+}
+
+function resumosVendasPorSabor(categoriaId) {
+  return ordenarProdutos(produtosDaCategoria(categoriaId))
+    .map((produto) => ({
+      nome: produto.nome,
+      ...resumoVendasDoProduto(produto),
+    }))
+    .filter((resumo) => resumo.quantidade > 0);
+}
+
+function criarLinhaVendaSabor(resumo) {
+  const linha = document.createElement("div");
+  linha.className = "linha-venda-sabor";
+
+  const nome = document.createElement("strong");
+  nome.textContent = resumo.nome;
+
+  const totais = document.createElement("span");
+  totais.textContent = `${formatarQuantidadeVendida(resumo.quantidade)} · ${formatarMoeda(resumo.valor)}`;
+
+  linha.appendChild(nome);
+  linha.appendChild(totais);
+  return linha;
+}
+
+function preencherListaVendasPorSabor(container, categoriaId) {
+  container.textContent = "";
+  const linhas = resumosVendasPorSabor(categoriaId);
+
+  if (linhas.length === 0) {
+    const vazio = document.createElement("p");
+    vazio.className = "mensagem-vendas-vazia";
+    vazio.textContent = "Nenhuma venda registrada por sabor ainda.";
+    container.appendChild(vazio);
+    return;
+  }
+
+  linhas.forEach((resumo) => {
+    container.appendChild(criarLinhaVendaSabor(resumo));
+  });
+}
+
+function atualizarResumoVendas() {
+  const config = categoriaConfig();
+  const resumo = resumoVendasDaCategoria();
+  el("resumo-vendas-titulo").textContent = config.tituloVendas;
+  el("total-quantidade-vendida").textContent = formatarQuantidadeVendida(resumo.quantidade);
+  el("total-valor-vendido").textContent = formatarMoeda(resumo.valor);
+  preencherListaVendasPorSabor(el("resumo-vendas-sabores"), categoriaAtual);
+}
+
+function atualizarContadoresCategorias() {
+  abasCategorias.forEach((aba) => {
+    const config = categoriaConfig(aba.dataset.categoria);
+    if (config.id === ABA_RESUMO) {
+      aba.textContent = config.nome;
+      return;
+    }
+    const total = produtosDaCategoria(config.id).length;
+    aba.textContent = total > 0 ? `${config.nome} (${total})` : config.nome;
+  });
+}
+
+function renderizarPainelVendas() {
+  const resumoGeral = resumoVendasDaCategoria(ABA_RESUMO);
+  el("total-geral-quantidade").textContent = formatarQuantidadeVendida(resumoGeral.quantidade);
+  el("total-geral-valor").textContent = formatarMoeda(resumoGeral.valor);
+
+  const detalhes = el("painel-vendas-detalhes");
+  detalhes.textContent = "";
+
+  CATEGORIAS.forEach((categoria) => {
+    const resumo = resumoVendasDaCategoria(categoria.id);
+    const grupo = document.createElement("section");
+    grupo.className = "grupo-vendas";
+
+    const titulo = document.createElement("h3");
+    titulo.textContent = categoria.nome;
+
+    const total = document.createElement("p");
+    total.className = "grupo-vendas-resumo";
+    total.textContent = `${formatarQuantidadeVendida(resumo.quantidade)} · ${formatarMoeda(resumo.valor)}`;
+
+    const sabores = document.createElement("div");
+    sabores.className = "resumo-vendas-sabores";
+    preencherListaVendasPorSabor(sabores, categoria.id);
+
+    grupo.appendChild(titulo);
+    grupo.appendChild(total);
+    grupo.appendChild(sabores);
+    detalhes.appendChild(grupo);
+  });
+}
+
 function renderizarProdutos() {
   // Remove cards antigos, mantendo os elementos fixos (estado vazio / carregando)
   Array.from(listaProdutos.querySelectorAll(".cartao-produto")).forEach((n) => n.remove());
+  atualizarContadoresCategorias();
 
-  const ordenados = ordenarProdutos(produtos);
+  if (categoriaAtual === ABA_RESUMO) {
+    estadoVazio.classList.add("oculto");
+    renderizarPainelVendas();
+    return;
+  }
+
+  const ordenados = ordenarProdutos(produtosDaCategoria());
+  estadoVazio.textContent = categoriaConfig().vazioLista;
   estadoVazio.classList.toggle("oculto", ordenados.length > 0);
+  atualizarResumoVendas();
 
   ordenados.forEach((produto) => {
     listaProdutos.appendChild(criarCardProduto(produto));
@@ -116,6 +379,7 @@ function criarCardProduto(produto) {
   const card = document.createElement("div");
   card.className = "cartao-produto" + (ativo ? "" : " inativo");
   card.dataset.id = produto.id;
+  card.dataset.categoria = categoriaDoProduto(produto);
 
   // Botão com nome + preço (toca pra abrir editar: nome, quantidade, preço)
   const botaoInfo = document.createElement("button");
@@ -152,9 +416,29 @@ function criarCardProduto(produto) {
   quantidade.className = "cartao-produto-quantidade";
   quantidade.textContent = String(produto.quantidade);
 
+  const btnSaida = document.createElement("button");
+  btnSaida.type = "button";
+  btnSaida.className = "btn-estoque btn-saida";
+  btnSaida.setAttribute("aria-label", `Registrar saída de ${produto.nome}`);
+  btnSaida.textContent = "-";
+  btnSaida.addEventListener("click", () => registrarMovimentacaoProduto(produto.id, "saida", btnSaida));
+
+  const btnEntrada = document.createElement("button");
+  btnEntrada.type = "button";
+  btnEntrada.className = "btn-estoque btn-entrada";
+  btnEntrada.setAttribute("aria-label", `Registrar entrada de ${produto.nome}`);
+  btnEntrada.textContent = "+";
+  btnEntrada.addEventListener("click", () => registrarMovimentacaoProduto(produto.id, "entrada", btnEntrada));
+
+  const controlesEstoque = document.createElement("div");
+  controlesEstoque.className = "cartao-produto-controles";
+  controlesEstoque.appendChild(btnSaida);
+  controlesEstoque.appendChild(quantidade);
+  controlesEstoque.appendChild(btnEntrada);
+
   card.appendChild(botaoInfo);
   card.appendChild(btnPausar);
-  card.appendChild(quantidade);
+  card.appendChild(controlesEstoque);
   return card;
 }
 
@@ -179,9 +463,122 @@ async function alternarAtivo(produtoId, botao) {
   }
 }
 
+async function registrarMovimentacaoProduto(produtoId, tipo, botao) {
+  if (travaSalvar) return;
+
+  const produto = produtos.find((p) => p.id === produtoId);
+  if (!produto) return;
+
+  const ehSaida = tipo === "saida";
+  let acao = ehSaida ? "venda" : "entrada";
+  let vendaParaDesfazer = null;
+
+  if (!ehSaida) {
+    vendaParaDesfazer = vendaRecenteParaDesfazer(produtoId);
+    if (vendaParaDesfazer) {
+      const deveDesfazer = window.confirm(
+        `Esse + é para adicionar "${produto.nome}" de volta, desfazendo a venda que acabou de registrar?\n\nOK = desfazer a venda\nCancelar = repor estoque`
+      );
+      acao = deveDesfazer ? "desfazer" : "entrada";
+    }
+  }
+
+  travaSalvar = true;
+  botao.disabled = true;
+  mostrarCarregando(true);
+
+  try {
+    let error = null;
+
+    if (acao === "desfazer") {
+      ({ error } = await db.rpc("desfazer_movimentacao", {
+        p_movimentacao_id: vendaParaDesfazer.id,
+      }));
+      delete ultimasVendasPorProduto[produtoId];
+    } else {
+      const rpc = ehSaida ? "registrar_venda" : "registrar_entrada";
+      const resposta = await db.rpc(rpc, {
+        p_produto_id: produtoId,
+        p_quantidade: 1,
+      });
+      error = resposta.error;
+
+      if (ehSaida && resposta.data?.id) {
+        ultimasVendasPorProduto[produtoId] = {
+          id: resposta.data.id,
+          registradaEm: Date.now(),
+        };
+      }
+
+      if (!ehSaida) {
+        delete ultimasVendasPorProduto[produtoId];
+      }
+    }
+
+    if (error) throw error;
+
+    esconderErro();
+    await carregarProdutos();
+  } catch (erro) {
+    console.error(erro);
+    mostrarErro(mensagemErroMovimentacao(acao));
+    botao.disabled = false;
+  } finally {
+    travaSalvar = false;
+    mostrarCarregando(false);
+  }
+}
+
+function vendaRecenteParaDesfazer(produtoId) {
+  const venda = ultimasVendasPorProduto[produtoId];
+  if (!venda) return null;
+
+  const aindaRecente = Date.now() - venda.registradaEm <= TEMPO_DESFAZER_VENDA_MS;
+  if (!aindaRecente) {
+    delete ultimasVendasPorProduto[produtoId];
+    return null;
+  }
+
+  return venda;
+}
+
+function mensagemErroMovimentacao(acao) {
+  if (acao === "venda") {
+    return "Não foi possível registrar a saída. Confira o estoque e tente de novo.";
+  }
+  if (acao === "desfazer") {
+    return "Não foi possível desfazer a venda. Tente de novo.";
+  }
+  return "Não foi possível registrar a entrada. Tente de novo.";
+}
+
 // ============================================================
 // NOVO PRODUTO — formulário fixo no topo da tela (sem modal, menos toques)
 // ============================================================
+
+function erroColunaCategoria(erro) {
+  return erro && (
+    erro.code === "PGRST204" ||
+    (erro.message || "").toLowerCase().includes("categoria")
+  );
+}
+
+async function inserirProduto(payload) {
+  const resposta = await db.from("produtos").insert(payload);
+  if (erroColunaCategoria(resposta.error)) {
+    return db.from("produtos").insert({ nome: payload.nome });
+  }
+  return resposta;
+}
+
+async function atualizarProduto(produtoId, payload) {
+  const resposta = await db.from("produtos").update(payload).eq("id", produtoId);
+  if (erroColunaCategoria(resposta.error)) {
+    const { categoria, ...payloadSemCategoria } = payload;
+    return db.from("produtos").update(payloadSemCategoria).eq("id", produtoId);
+  }
+  return resposta;
+}
 
 el("btn-salvar-novo-produto").addEventListener("click", async () => {
   if (travaSalvar) return;
@@ -196,7 +593,7 @@ el("btn-salvar-novo-produto").addEventListener("click", async () => {
   travaSalvar = true;
   mostrarCarregando(true);
   try {
-    const { error } = await db.from("produtos").insert({ nome });
+    const { error } = await inserirProduto({ nome, categoria: categoriaAtual });
     if (error) {
       if (error.code === "23505") {
         mostrarErroCampo("erro-novo-produto", "Já existe um produto com esse nome.");
@@ -234,6 +631,7 @@ function abrirEdicaoProduto(produtoId) {
   const produto = produtos.find((p) => p.id === produtoId);
   if (!produto) return;
   el("input-editar-id").value = produtoId;
+  el("select-editar-categoria").value = categoriaDoProduto(produto);
   el("input-editar-nome").value = produto.nome;
   el("input-editar-quantidade").value = String(produto.quantidade);
   el("input-editar-preco").value = produto.preco != null ? String(produto.preco).replace(".", ",") : "";
@@ -246,6 +644,7 @@ el("btn-salvar-editar-produto").addEventListener("click", async () => {
 
   const produtoId = el("input-editar-id").value;
   const nome = el("input-editar-nome").value.trim();
+  const categoria = el("select-editar-categoria").value;
   const quantidadeBruta = el("input-editar-quantidade").value.trim();
   const precoBruto = el("input-editar-preco").value.trim();
 
@@ -269,7 +668,7 @@ el("btn-salvar-editar-produto").addEventListener("click", async () => {
   travaSalvar = true;
   mostrarCarregando(true);
   try {
-    const { error } = await db.from("produtos").update({ nome, quantidade, preco }).eq("id", produtoId);
+    const { error } = await atualizarProduto(produtoId, { nome, categoria, quantidade, preco });
     if (error) {
       if (error.code === "23505") {
         mostrarErroCampo("erro-editar-produto", "Já existe um produto com esse nome.");
@@ -329,6 +728,10 @@ function fecharModal(id) {
 }
 
 function configurarEventos() {
+  abasCategorias.forEach((aba) => {
+    aba.addEventListener("click", () => selecionarCategoria(aba.dataset.categoria));
+  });
+
   document.querySelectorAll("[data-fechar-modal]").forEach((botao) => {
     botao.addEventListener("click", () => fecharModal(botao.dataset.fecharModal));
   });
@@ -339,9 +742,60 @@ function configurarEventos() {
   });
 
   el("btn-gerar-imagem").addEventListener("click", gerarImagemInline);
+  el("switch-mostrar-precos").addEventListener("change", (evento) => {
+    mostrarPrecosImagem = evento.target.checked;
+    limparImagensGeradas();
+    if (!el("resultado-imagem").classList.contains("oculto")) gerarPreviaImagem();
+  });
 
   el("btn-compartilhar").addEventListener("click", compartilharImagem);
   el("btn-baixar-imagem").addEventListener("click", baixarImagem);
+}
+
+function selecionarCategoria(categoriaId) {
+  if (!categoriaValida(categoriaId) || categoriaAtual === categoriaId) return;
+  categoriaAtual = categoriaId;
+  atualizarInterfaceCategoria();
+  renderizarProdutos();
+
+  if (categoriaAtual === ABA_RESUMO) return;
+
+  if (!el("resultado-imagem").classList.contains("oculto")) {
+    const imagem = imagemDaCategoria();
+    if (imagem.blob && imagem.url) {
+      exibirImagemGerada(imagem.url);
+    } else {
+      gerarPreviaImagem();
+    }
+  }
+}
+
+function atualizarInterfaceCategoria() {
+  const config = categoriaConfig();
+  const resumoAtivo = categoriaAtual === ABA_RESUMO;
+
+  abasCategorias.forEach((aba) => {
+    const ativa = aba.dataset.categoria === categoriaAtual;
+    aba.classList.toggle("ativa", ativa);
+    aba.setAttribute("aria-pressed", ativa ? "true" : "false");
+  });
+
+  el("cartao-produto-form").classList.toggle("oculto", resumoAtivo);
+  listaProdutos.classList.toggle("oculto", resumoAtivo);
+  el("secao-imagem").classList.toggle("oculto", resumoAtivo);
+  el("painel-vendas").classList.toggle("oculto", !resumoAtivo);
+
+  if (resumoAtivo) {
+    renderizarPainelVendas();
+    return;
+  }
+
+  el("titulo-novo-produto").textContent = config.tituloNovo;
+  el("input-novo-nome").placeholder = config.placeholderNovo;
+  el("btn-salvar-novo-produto").textContent = config.textoSalvar;
+  el("btn-gerar-imagem").textContent = config.textoGerarImagem;
+  el("aviso-sem-produtos").textContent = config.vazioImagem;
+  atualizarResumoVendas();
 }
 
 // ============================================================
@@ -375,8 +829,6 @@ function mostrarCarregando(mostrar) {
 // IMAGEM PARA WHATSAPP — seção no fim da mesma página
 // ============================================================
 
-let blobImagemAtual = null;
-
 async function gerarImagemInline() {
   el("resultado-imagem").classList.remove("oculto");
   await gerarPreviaImagem();
@@ -384,40 +836,52 @@ async function gerarImagemInline() {
 }
 
 function produtosParaImagem() {
-  return produtos
+  return produtosDaCategoria()
     .filter((p) => p.ativo !== false)
     .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
+}
+
+function exibirImagemGerada(url) {
+  const imagem = imagemDaCategoria();
+  el("aviso-sem-produtos").classList.add("oculto");
+  document.getElementById("preview-container").classList.remove("oculto");
+  const imgEl = el("preview-imagem");
+  imgEl.src = url;
+  el("btn-compartilhar").disabled = false;
+  el("btn-baixar-imagem").classList.toggle("oculto", !imagem.blob || podeCompartilharArquivo(imagem.blob));
 }
 
 async function gerarPreviaImagem() {
   const lista = produtosParaImagem();
   const semProdutos = lista.length === 0;
+  const imagem = imagemDaCategoria();
 
+  el("aviso-sem-produtos").textContent = categoriaConfig().vazioImagem;
   el("aviso-sem-produtos").classList.toggle("oculto", !semProdutos);
   document.getElementById("preview-container").classList.toggle("oculto", semProdutos);
   el("btn-baixar-imagem").classList.add("oculto");
   // Desabilita o botão de enviar enquanto a imagem não está pronta, para
   // um toque impaciente não cair no "clicou e não aconteceu nada".
   el("btn-compartilhar").disabled = true;
-  blobImagemAtual = null;
+  limparImagemCategoria(categoriaAtual);
 
   if (semProdutos) return;
 
   mostrarCarregando(true);
   try {
-    // Preços sempre aparecem na imagem; não há mais opções para configurar.
-    const opcoes = { mostrarPrecos: true, recado: "" };
+    const opcoes = {
+      mostrarPrecos: mostrarPrecosImagem,
+      recado: "",
+      titulo: categoriaConfig().tituloImagem,
+    };
     const blob = await desenharImagemCardapio(lista, opcoes);
     if (!blob) throw new Error("Canvas não gerou a imagem (blob vazio)");
 
-    blobImagemAtual = blob;
+    imagem.blob = blob;
     const url = URL.createObjectURL(blob);
-    const imgEl = el("preview-imagem");
-    const antiga = imgEl.src;
-    imgEl.src = url;
-    if (antiga && antiga.startsWith("blob:")) URL.revokeObjectURL(antiga);
+    imagem.url = url;
+    exibirImagemGerada(url);
 
-    el("btn-compartilhar").disabled = false;
     if (!podeCompartilharArquivo(blob)) {
       el("btn-baixar-imagem").classList.remove("oculto");
     }
@@ -442,13 +906,14 @@ function podeCompartilharArquivo(blob) {
 // Chamado direto no clique, sem processamento assíncrono antes,
 // para não ser bloqueado pelo Safari do iPhone.
 function compartilharImagem() {
-  if (!blobImagemAtual) {
+  const imagem = imagemDaCategoria();
+  if (!imagem.blob) {
     mostrarErro("A imagem ainda está sendo gerada, aguarde um instante e toque de novo.");
     return;
   }
 
   const nomeArquivo = nomeArquivoImagem();
-  const arquivo = new File([blobImagemAtual], nomeArquivo, { type: "image/png" });
+  const arquivo = new File([imagem.blob], nomeArquivo, { type: "image/png" });
 
   if (navigator.canShare && navigator.canShare({ files: [arquivo] })) {
     navigator.share({ files: [arquivo] }).catch((erro) => {
@@ -469,12 +934,13 @@ function nomeArquivoImagem() {
   const ano = hoje.getFullYear();
   const mes = String(hoje.getMonth() + 1).padStart(2, "0");
   const dia = String(hoje.getDate()).padStart(2, "0");
-  return `cardapio-${ano}-${mes}-${dia}.png`;
+  return `cardapio-${categoriaAtual}-${ano}-${mes}-${dia}.png`;
 }
 
 function baixarImagem() {
-  if (!blobImagemAtual) return;
-  const url = URL.createObjectURL(blobImagemAtual);
+  const imagem = imagemDaCategoria();
+  if (!imagem.blob) return;
+  const url = URL.createObjectURL(imagem.blob);
   const a = document.createElement("a");
   a.href = url;
   a.download = nomeArquivoImagem();
@@ -639,7 +1105,7 @@ async function desenharImagemCardapio(listaProdutos, opcoes) {
   // Título
   ctx.fillStyle = "#3a2a2a";
   ctx.font = `700 34px ${fonte}`;
-  ctx.fillText(CONFIG.TITULO_IMAGEM, LARGURA / 2, y + 34);
+  ctx.fillText(opcoes.titulo || CONFIG.TITULO_IMAGEM, LARGURA / 2, y + 34);
   y += BLOCO_TITULO;
 
   // Data
