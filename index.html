@@ -38,6 +38,13 @@
     <section id="cartao-produto-form" class="cartao-novo-produto">
       <h2 id="titulo-novo-produto">Novo geladinho</h2>
       <input id="input-novo-nome" class="campo-novo-produto" type="text" maxlength="80" placeholder="Nome (ex: Ninho com Oreo)" />
+      <div class="linha-preco-padrao">
+        <label class="check-preco-padrao">
+          <input id="check-usar-preco-padrao" type="checkbox" />
+          <span>Usar preço padrão</span>
+        </label>
+        <input id="input-preco-padrao" class="campo-novo-produto campo-preco-padrao" type="text" inputmode="decimal" placeholder="R$ 5,00" aria-label="Preço padrão" />
+      </div>
       <p id="erro-novo-produto" class="erro-campo oculto"></p>
       <button id="btn-salvar-novo-produto" class="botao botao-principal botao-largo" type="button">Salvar geladinho</button>
       <div id="resumo-vendas" class="resumo-vendas" aria-live="polite">
@@ -131,6 +138,11 @@
       <label class="campo">
         <span>Preço (opcional)</span>
         <input id="input-editar-preco" type="text" inputmode="decimal" placeholder="Ex: 3,50" />
+      </label>
+      <label class="controle-switch" for="check-editar-preco-padrao">
+        <span>Usar preço padrão</span>
+        <input id="check-editar-preco-padrao" type="checkbox" />
+        <span class="switch-visual" aria-hidden="true"></span>
       </label>
       <p id="erro-editar-produto" class="erro-campo oculto"></p>
       <div class="modal-botoes">

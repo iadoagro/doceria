@@ -590,10 +590,22 @@ el("btn-salvar-novo-produto").addEventListener("click", async () => {
     return;
   }
 
+  let precoPadrao = null;
+  if (el("check-usar-preco-padrao").checked) {
+    precoPadrao = converterPreco(el("input-preco-padrao").value.trim());
+    if (precoPadrao === null) {
+      mostrarErroCampo("erro-novo-produto", "Informe o preço padrão (ex: 5,00) ou desmarque a opção.");
+      return;
+    }
+    guardarPrecoPadrao();
+  }
+
   travaSalvar = true;
   mostrarCarregando(true);
   try {
-    const { error } = await inserirProduto({ nome, categoria: categoriaAtual });
+    const payload = { nome, categoria: categoriaAtual };
+    if (el("check-usar-preco-padrao").checked) payload.preco = precoPadrao;
+    const { error } = await inserirProduto(payload);
     if (error) {
       if (error.code === "23505") {
         mostrarErroCampo("erro-novo-produto", "Já existe um produto com esse nome.");
@@ -615,6 +627,42 @@ el("btn-salvar-novo-produto").addEventListener("click", async () => {
   }
 });
 
+// Preço padrão guardado por categoria neste aparelho.
+function chavePrecoPadrao(categoria = categoriaAtual) {
+  return "precoPadrao:" + categoria;
+}
+
+function lerPrecoPadraoSalvo(categoria) {
+  try {
+    return JSON.parse(localStorage.getItem(chavePrecoPadrao(categoria))) || { usar: false, valor: "" };
+  } catch (e) {
+    return { usar: false, valor: "" };
+  }
+}
+
+// Preço padrão numérico da categoria, ou null se não definido
+function lerPrecoPadrao(categoria) {
+  return converterPreco((lerPrecoPadraoSalvo(categoria).valor || "").trim());
+}
+
+function carregarPrecoPadrao() {
+  const salvo = lerPrecoPadraoSalvo(categoriaAtual);
+  el("check-usar-preco-padrao").checked = !!salvo.usar;
+  el("input-preco-padrao").value = salvo.valor || "";
+}
+
+function guardarPrecoPadrao() {
+  try {
+    localStorage.setItem(chavePrecoPadrao(), JSON.stringify({
+      usar: el("check-usar-preco-padrao").checked,
+      valor: el("input-preco-padrao").value.trim(),
+    }));
+  } catch (e) {}
+}
+
+el("check-usar-preco-padrao").addEventListener("change", guardarPrecoPadrao);
+el("input-preco-padrao").addEventListener("input", guardarPrecoPadrao);
+
 function converterPreco(texto) {
   if (!texto) return null;
   const normalizado = texto.replace(/\./g, "").replace(",", ".");
@@ -635,9 +683,38 @@ function abrirEdicaoProduto(produtoId) {
   el("input-editar-nome").value = produto.nome;
   el("input-editar-quantidade").value = String(produto.quantidade);
   el("input-editar-preco").value = produto.preco != null ? String(produto.preco).replace(".", ",") : "";
+  const padrao = lerPrecoPadrao(categoriaDoProduto(produto));
+  el("check-editar-preco-padrao").checked = padrao !== null && produto.preco != null &&
+    Math.abs(Number(produto.preco) - padrao) < 0.005;
+  atualizarPrecoPadraoModal();
   esconderErroCampo("erro-editar-produto");
   abrirModal("modal-editar-produto");
 }
+
+// Com "Usar preço padrão" ligado, o campo de preço recebe o padrão da categoria e fica travado
+function atualizarPrecoPadraoModal() {
+  const usar = el("check-editar-preco-padrao").checked;
+  const campo = el("input-editar-preco");
+  if (usar) {
+    const padrao = lerPrecoPadrao(el("select-editar-categoria").value);
+    if (padrao === null) {
+      el("check-editar-preco-padrao").checked = false;
+      campo.readOnly = false;
+      mostrarErroCampo("erro-editar-produto", "Defina o preço padrão no formulário da aba antes de usar.");
+      return;
+    }
+    campo.value = String(padrao).replace(".", ",");
+  }
+  campo.readOnly = usar;
+}
+
+el("check-editar-preco-padrao").addEventListener("change", () => {
+  esconderErroCampo("erro-editar-produto");
+  atualizarPrecoPadraoModal();
+});
+el("select-editar-categoria").addEventListener("change", () => {
+  if (el("check-editar-preco-padrao").checked) atualizarPrecoPadraoModal();
+});
 
 el("btn-salvar-editar-produto").addEventListener("click", async () => {
   if (travaSalvar) return;
@@ -793,6 +870,7 @@ function atualizarInterfaceCategoria() {
   el("titulo-novo-produto").textContent = config.tituloNovo;
   el("input-novo-nome").placeholder = config.placeholderNovo;
   el("btn-salvar-novo-produto").textContent = config.textoSalvar;
+  carregarPrecoPadrao();
   el("btn-gerar-imagem").textContent = config.textoGerarImagem;
   el("aviso-sem-produtos").textContent = config.vazioImagem;
   atualizarResumoVendas();

@@ -145,6 +145,32 @@ img, canvas {
   outline-offset: 1px;
 }
 
+.linha-preco-padrao {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.check-preco-padrao {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-height: 48px;
+  color: var(--cor-texto);
+}
+
+.check-preco-padrao input {
+  width: 20px;
+  height: 20px;
+}
+
+.campo-preco-padrao {
+  width: 110px;
+  margin-bottom: 0;
+}
+
 .botao-largo {
   width: 100%;
   flex: none;
@@ -750,4 +776,9 @@ img, canvas {
     align-items: flex-start;
     flex-direction: column;
   }
+}
+
+.modal-conteudo .controle-switch {
+  margin-bottom: 12px;
+  box-shadow: none;
 }
